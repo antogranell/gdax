@@ -1,0 +1,26 @@
+Trigers
+- bottom
+	- previous move (e.g. 30% down?)
+	- RSI (e.g. still stable?)
+	- macd hist: neg but uptick? positive tick?
+	- Stoch RSI bullish cross
+	- hammer
+- top
+	- macd bearish
+	- histogram downtick
+	- price uptrend but RSI down
+	- stoch RSI bearish cross (RSI better thatn macd->lagg)
+	- shooting star
+	- hanging man
+
+more
+	- RSI divergence
+	- Engulfing bearish/bullish
+
+- supports/resistance
+	- weekly/monthly close
+	- sma
+	- elliot waves
+	- Fib levels (61% or 3rd EW)
+	- Triangle trend channel
+	- Average Discretional Index wth DI+ and DI- : fixed range
