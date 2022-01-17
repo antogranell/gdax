@@ -1,3 +1,44 @@
+dfx = df15.iloc[105:126,:].reset_index(drop=True)
+dfc_ = dfx.iloc[[0],:]
+
+thresnull = 0.00014
+#thresnull = 0.0008
+
+conct_target = 3
+prev_pr = 4300
+prev_sign = np.nan
+prev_conct = 0
+conct = 1
+
+dfc = pd.DataFrame()
+for index, row in dfx.iloc[:].iterrows():
+    
+    dfc_ = pd.DataFrame(row).T
+    pr = dfc_.iloc[0]['c']
+    
+    ret = (pr - prev_pr) / prev_pr
+    ret = 0 if abs(ret) < thresnull else ret
+    sign = 'pos' if ret > 0 else 'neg' if ret < 0 else ''
+    
+    if sign==prev_sign:
+        conct = prev_conct+1
+        if conct == conct_target:
+            trade='L' if sign=='neg' else 'S' if sign=='pos' else ''
+        else:
+            trade = ''
+    else:
+        conct = 1
+        trade = ''
+        
+    prev_pr = pr
+    prev_sign = sign
+    prev_conct = conct
+    
+    if len(trade)>0:
+        print(index, trade)
+    
+    ##############
+
 
 dfx = df15.iloc[105:126,:].reset_index(drop=True)
 dfc_ = dfx.iloc[[0],:]
