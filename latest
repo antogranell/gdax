@@ -1,3 +1,52 @@
+
+def init_vals():
+    return get_price(ws, subpr), np.nan, 0
+
+def mean_rev_xper(conct_target, pr, prev_pr, prev_sign, prev_conct, thresnull=0.00014):
+    
+    ret = (pr - prev_pr) / prev_pr
+    ret = 0 if abs(ret) < thresnull else ret
+    sign = 'pos' if ret > 0 else 'neg' if ret < 0 else ''
+    
+    if sign==prev_sign:
+        conct = prev_conct+1
+        if conct == conct_target:
+            trade='L' if sign=='neg' else 'S' if sign=='pos' else ''
+            ### open trade
+        else:
+            trade = ''
+    else:
+        conct = 1
+        trade = ''
+        
+    return trade, ret, pr, sign, conct
+    
+    
+thresnull = 0.00015
+conct_target = 3
+secondsbuffer = 1
+
+prev_pr, prev_sign, prev_conct = init_vals()
+
+dfr = pd.DataFrame()
+ct=0
+while ct < 5:
+
+    #if ((dt.datetime.now().minute % mins == 0) & (dt.datetime.now().second < secondsbuffer)):
+    if ((dt.datetime.now().minute % mins == 0) & (dt.datetime.now().second % 10 == 0)):
+        
+        trade, ret, prev_pr, prev_sign, prev_conct = mean_rev_xper(conct_target, get_price(ws, subpr), prev_pr, prev_sign, prev_conct, thresnull=thresnull)
+        
+        dfr_ = pd.DataFrame([dt.datetime.now(), prev_pr, get_price(ws, subpr), ret, prev_sign, prev_conct, trade]).T
+        dfr_.columns = ['t','price','pr_update','ret','sign','conct','trade']
+        dfr = pd.concat([dfr, dfr_], axis=0)
+        
+        time.sleep(2)
+        ct +=1
+dfr   
+
+###############################################################3
+
 dfx = df15.iloc[105:126,:].reset_index(drop=True)
 dfc_ = dfx.iloc[[0],:]
 
