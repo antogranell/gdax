@@ -1,0 +1,338 @@
+from pybit import WebSocket, HTTP
+import win32api as pywin32
+
+def set_leverage(lev, product, session_private):
+    try:
+        ret_msg = session_private.set_leverage(symbol=product, buy_leverage=lev, sell_leverage=lev)['ret_msg']
+    except Exception as e:
+        #pass
+        ret_msg= e.message
+    print('leverage:', lev, '-', ret_msg)
+
+def get_trade_size(session_private, use_perc_balance, product="BTCUSDT", test=True):
+    balance = session_private.get_wallet_balance()['result']['USDT']['available_balance']
+    return math.floor(balance * use_perc_balance * lev / get_price(product=product, test=test)*1000)/1000
+
+#-------------------------------------trading---------------------------
+def put_order(session_private, product, pr, trade, quantity, order_type="Limit", dummy=True):
+    if dummy:
+        order_id = random.randint(0,10000)
+    else:
+        order_id = session_private.place_active_order(symbol=product, side=trade, order_type=order_type, qty=quantity, price=pr, time_in_force="GoodTillCancel", reduce_only=False, close_on_trigger=False)['result']['order_id']
+    message = 'set ' + trade + ' ' + order_type + ' order of ' + str(quantity) + ' @ ' + str(pr)
+    return order_id, message + ' - order_id:' +  str(order_id)
+
+def cancel_order(session_private, order_id, dummy=True):
+    if dummy:
+        ret_msg = 'cancel dummy order - ' + str(order_id)
+    else:
+        msg = session_private.cancel_active_order(symbol=product,order_id=order_id)['ret_msg']
+        ret_msg = 'cancel order ' +  str(order_id) + ' ' + msg
+    return ret_msg
+
+def check_positions(session_private, product, dummy=True):
+    if dummy:
+        if random.randint(0,1):
+            return ''
+        else:
+            return 'some position'
+    else:
+        r = session_private.my_position(symbol=product)['result']
+        return [p for p in (r if isinstance(r, list) else [r]) if p['size'] > 0]
+    
+def close_position(session_private, product, dummy=True):
+    if dummy:
+        return 'dummy position closed ' + product
+    else:
+        session_private.close_position(symbol=product)
+        return 'position closed ' + product
+#-------------------------------------------------------------------------------
+
+#def connect_public_old(mins, product="BTCUSDT", test=True):
+#    if test:
+#        url = 'https://api-testnet.bybit.com'
+#        net = 'wss://stream-testnet.bybit.com/realtime_public'
+#    else:
+#        url = 'https://api.bybit.com'
+#        net = 'wss://stream.bybit.com/realtime_public'
+#        
+#    subpr = "instrument_info.100ms."+product
+#    subc = "candle."+str(mins)+"."+product
+#    ws = WebSocket(endpoint=net, subscriptions=[subpr, subc], ping_timeout=10, ping_interval=30, logging_level=0);
+#    session1 = HTTP(url)
+#    return ws, session1, subpr, subc
+#
+#def connect_private_old(api_key, api_secret, test=True):
+#    if test:
+#        url = 'https://api-testnet.bybit.com'
+#        net = 'wss://stream-testnet.bybit.com/realtime_private'
+#    else:
+#        url = 'https://api.bybit.com'
+#        net = 'wss://stream.bybit.com/realtime_private'
+#        
+#    session = HTTP(endpoint=url, api_key=api_key, api_secret=api_secret, recv_window=50000)
+#    ws = WebSocket(endpoint=net,  subscriptions=['order', 'position'], api_key=api_key, api_secret=api_secret, ping_timeout=10, ping_interval=30, logging_level=0)
+#    return ws, session
+
+def connect_session_private(api_key, api_secret, test=True):
+    if test:
+        url = 'https://api-testnet.bybit.com'
+    else:
+        url = 'https://api.bybit.com'
+    return HTTP(endpoint=url, api_key=api_key, api_secret=api_secret, recv_window=50000)
+    
+def connect_ws_private(api_key, api_secret, test=True):
+    if test:
+        net = 'wss://stream-testnet.bybit.com/realtime_private'
+    else:
+        net = 'wss://stream.bybit.com/realtime_private'
+    return WebSocket(endpoint=net,  subscriptions=['order', 'position'], api_key=api_key, api_secret=api_secret, ping_timeout=200, ping_interval=300, logging_level=0)
+        
+def connect_session_public(test=True):
+    if test:
+        url = 'https://api-testnet.bybit.com'
+    else:
+        url = 'https://api.bybit.com'
+    return HTTP(url)
+    
+def connect_ws_public(product="BTCUSDT", test=True):
+    if test:
+        net = 'wss://stream-testnet.bybit.com/realtime_public'
+    else:
+        net = 'wss://stream.bybit.com/realtime_public'
+    subpr = "instrument_info.100ms."+product
+    ws = WebSocket(endpoint=net, subscriptions=[subpr], ping_timeout=10, ping_interval=30, logging_level=0);
+    return ws, subpr
+
+def get_price_old(product="BTCUSDT", test=True):
+    ws_public, subpr = connect_ws_public(product=product, test=test)
+    pr =  float(pd.json_normalize(ws_public.fetch(subpr))['last_price'][0])
+    ws_public.exit()
+    return pr
+
+def get_price(product="BTCUSDT", test=True):
+    ct = 0
+    ws_public, subpr = connect_ws_public(product=product, test=test)
+    time.sleep(0.05)
+    dfpr = pd.json_normalize(ws_public.fetch(subpr))
+    leng = len(dfpr.columns)
+    while leng == 0:
+        dfpr = pd.json_normalize(ws_public.fetch(subpr))
+        leng = len(dfpr.columns)
+        time.sleep(0.05)
+        ct+=1
+    ws_public.exit()
+    pr = float(dfpr['last_price'][0])
+    return pr
+
+def get_latency(session_public):
+    x = (dt.datetime.now() - datetime.datetime.fromtimestamp(float(session_public.server_time()['time_now'])))
+    return (x.seconds + x.microseconds/1000000), round(time.time()-float(session_public.server_time()['time_now']),6)
+        
+def get_latency_adjust(session_public):
+    lat = round(time.time()-float(session_public.server_time()['time_now']),6)
+    if 1 > abs(lat) > 0.75:  
+        return int(round(lat))
+    elif abs(lat) > 1:
+        return int(np.floor(lat))
+    else: 
+        return 0
+    
+def setsystime(secdelta):
+    while not 60 > dt.datetime.now().second - secdelta > 0:
+        time.sleep(0.3)
+    t1 = dt.datetime.now()
+    millisec = int(round((dt.datetime.now() - dt.datetime(dt.datetime.now().year, dt.datetime.now().month, dt.datetime.now().day, dt.datetime.now().hour, dt.datetime.now().minute, 0)).microseconds / 1000))
+    pywin32.SetSystemTime(dt.datetime.now().year, dt.datetime.now().month, dt.datetime.now().weekday(), dt.datetime.now().day, dt.datetime.now().hour-1, dt.datetime.now().minute, dt.datetime.now().second - secdelta, millisec)
+    return 'time changed '+ str(secdelta) + ' seconds; from: ' + str(t1) + ' - to:' + str(dt.datetime.now())
+
+def adjust_time_for_latency(session_public):
+    secdelta = get_latency_adjust(session_public)
+    if secdelta != 0:
+        msg = setsystime(secdelta)
+    else:
+        msg = ''
+    return msg
+
+def init_vals(product="BTCUSDT", test=True):
+    return get_price(product=product, test=test), np.nan, 0, ''
+
+def get_vola50sec(product="BTCUSDT", test=True):
+    try:
+        itime = dt.datetime.now()
+        vola_ct = 0
+        pr_vola = []
+        while (dt.datetime.now() - itime).seconds < 45:
+            pr_vola.append(get_price(product=product, test=test))
+            vola_ct+=1
+            time.sleep(1.5)
+        vol1 = round((np.array(pr_vola)[1:] / np.array(pr_vola)[:-1]).std() * np.sqrt(365*24*60*30), 6)
+        vol2 = round((np.array(pr_vola)[-3:] / np.array(pr_vola)[-4:-1]).std() * np.sqrt(365*24*60*30), 6)
+        dif1 = round(abs(np.array(pr_vola)[1:] - np.array(pr_vola)[:-1]).mean(), 4)
+        dif2 = round(abs(np.array(pr_vola)[-3:] - np.array(pr_vola)[-4:-1]).mean(), 4)
+        #print(dt.datetime.now()- itime)
+        x =  pd.DataFrame([[vol1, vol2, dif1, dif2]], columns = ['vola_50sec','vola_6sec','dif_50sec','dif_6sec'])
+    except:
+        x = pd.DataFrame(columns = ['vola_50sec','vola_6sec','dif_50sec','dif_6sec'])
+    return x
+
+def mean_rev_xper(conct_target, pr, prev_pr, prev_sign, prev_conct, trade_size, thresnull=0.00014, price_buffer=1/10000, dummy=True):
+    msg = ''
+    trade=''
+    order_id = 0
+    conct = 1
+    ret = (pr - prev_pr) / prev_pr
+    ret = 0 if abs(ret) < thresnull else ret
+    sign = 'pos' if ret > 0 else 'neg' if ret < 0 else ''
+    
+    if sign==prev_sign:
+        conct = prev_conct+1
+        if conct == conct_target and trade_size > 0:
+            
+            if sign=='neg':
+                trade='Buy'
+                order_id, msg = put_order(product, round(pr - pr*price_buffer, 2), trade=trade, quantity=trade_size, order_type='limit', dummy=dummy)
+            elif sign=='pos':
+                trade='Sell'
+                order_id, msg = put_order(product, round(pr + pr*price_buffer, 2), trade=trade, quantity=trade_size, order_type='limit', dummy=dummy)    
+        
+    return trade, ret, pr, sign, conct, order_id, msg
+    
+    
+    dummy = True
+product="BTCUSDT"
+lev = 3
+use_perc_balance = 0.3
+
+thresnull = 0.000#15 #minimum not null return
+conct_target = 3 #consecutive signs to trade
+periods_in_trade = 2 #periods that trades is open
+secondsbuffer = 1
+price_buffer=1/10000
+#trade_size = 0.001
+
+api_name = '' #NO fixed IP (19-01-2022)
+api_key = ''
+api_secret = ''
+permission = 'Contracts - Orders Positions'
+
+mins = 5
+test=False
+
+session_private = connect_session_private(api_key, api_secret, test=test)
+session_public = connect_session_public(test=True)
+
+prev_pr, prev_sign, prev_conct, trade = init_vals(product=product, test=test)
+lat1, lat2 = get_latency(session_public)
+print('latency in seconds:', lat1, '/', lat2) 
+
+print(adjust_time_for_latency(session_public))
+set_leverage(lev, product, session_private)
+trade_size = get_trade_size(session_private, use_perc_balance)
+
+dfr = pd.DataFrame()
+dfvola = pd.DataFrame(columns = ['vola_50sec','vola_6sec','dif_50sec','dif_6sec'])
+ct = 0
+ct_trade = 0
+in_trade = 0
+
+position=True
+
+#------------------------------------- logging--------------------------------
+locroot = 'C:/python_projects/'
+filename = 'bot_activity_' + str(dt.datetime.today())[:10] + '.csv'
+with open(locroot + filename, 'w', newline='') as csvfile:
+    
+    fieldnames = ['t','price','ret','sign','conct','trade', 'order_id','message','price_buffer', 'vola_50sec','vola_6sec','dif_50sec','dif_6sec']
+    writer = csv.DictWriter(csvfile, fieldnames=fieldnames, delimiter=';')
+    writer.writeheader() 
+#------------------------------------------------------------------------------
+
+    print('starting time:', dt.datetime.now())
+    
+    while ct < 10000:
+
+        msg = []
+        
+        if ((dt.datetime.now().minute % mins == (mins - 3)) & (dt.datetime.now().second < secondsbuffer)):
+            #3 min before evaluating, set trade size
+            print(dt.datetime.now(), 'get trade size')  
+            session_private = connect_session_private(api_key, api_secret, test=test)
+            trade_size = get_trade_size(session_private, use_perc_balance)
+            time.sleep(1)
+
+        if ((dt.datetime.now().minute % mins == (mins - 2)) & (dt.datetime.now().second < secondsbuffer)):
+            #2 min before evaluating, adjust for latency
+            print(dt.datetime.now(), 'adjust latency')
+            session_public = connect_session_public(test=True)
+            msg_ = adjust_time_for_latency(session_public)
+            msg.append(msg_)
+            time.sleep(1)
+
+        if ((dt.datetime.now().minute % mins == (mins - 1)) & (dt.datetime.now().second < secondsbuffer)):
+            #1 min before evaluating, calculate vola
+            print(dt.datetime.now(), 'get vola')
+            dfvola = get_vola50sec()
+            
+        if ((dt.datetime.now().minute % mins == 0) & (dt.datetime.now().second < secondsbuffer)):
+            print(ct, dt.datetime.now(), 'evaluate')
+            session_private = connect_session_private(api_key, api_secret, test=test)
+            
+            if ct_trade == periods_in_trade:
+
+                if not check_positions(session_private, product, dummy=dummy):
+                    status = cancel_order(current_open_order_id)
+                    msg.append(status)
+                    in_trade = 0
+                else:
+                    print('close trade')
+
+                    close_pr = get_price(product=product, test=test)
+
+                    if current_trade=='Buy':
+                        close_order_id, msg_ = put_order(product, round(close_pr + close_pr*price_buffer, 2), trade='Sell', quantity=current_trade_size, order_type='limit', dummy=dummy)
+                        msg.append(msg_)
+                    elif current_trade=='Sell':
+                        close_order_id, msg_ = put_order(product, round(close_pr - close_pr*price_buffer, 2), trade='Buy', quantity=current_trade_size, order_type='limit', dummy=dummy)   
+                        msg.append(msg_)
+
+            if ct_trade == periods_in_trade + 1:
+
+                if check_positions(session_private, product, dummy=dummy):
+                    status = cancel_order(close_order_id, dummy=dummy)
+                    print(status)
+                    msg.append(status)
+
+                    print('close market position', current_open_order_id)
+                    status = close_position(session_private, product, dummy=dummy) + ' - current_open_order_id: ' + str(current_open_order_id)
+                    print(status)
+                    msg.append(status)
+
+                in_trade = 0
+
+            trade, ret, prev_pr, prev_sign, prev_conct, order_id, msg_ = mean_rev_xper(conct_target, get_price(product=product, test=test), prev_pr, prev_sign, prev_conct, trade_size, 
+                                                                                       thresnull=thresnull, price_buffer=price_buffer, dummy=dummy)
+            msg.append(msg_)
+
+            if trade:
+                in_trade = 1
+                current_open_order_id = order_id
+                current_trade = trade
+                current_trade_size = trade_size
+
+            pr_buffer_usd = round(get_price(product=product, test=test) * price_buffer, 2)
+            
+            msg = str(msg).replace('[','').replace(']','').replace("'","")
+            dfr_ = pd.DataFrame([dt.datetime.now(), prev_pr, ret, prev_sign, prev_conct, trade, order_id, msg, pr_buffer_usd]).T
+            dfr_.columns = ['t','price','ret','sign','conct','trade', 'order_id','message','price_buffer']
+            dfr_= pd.concat([dfr_, dfvola], axis=1)
+            print(dfr_)
+            writer.writerow(dict(dfr_.iloc[0]))
+
+            dfr = pd.concat([dfr, dfr_], axis=0)
+
+            ct +=1
+            ct_trade = (ct_trade+1)*in_trade
+            time.sleep(2)
+
+dfr.reset_index()
