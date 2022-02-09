@@ -194,7 +194,7 @@ mins = 5
 test=False
 
 session_private = connect_session_private(api_key, api_secret, test=test)
-session_public = connect_session_public(test=True)
+session_public = connect_session_public(test=test)
 
 prev_pr, prev_sign, prev_conct, trade = init_vals(product=product, test=test)
 lat1, lat2 = get_latency(session_public)
