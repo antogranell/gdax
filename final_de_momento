@@ -48,32 +48,6 @@ def close_position(session_private, product, dummy=True):
         return 'position closed ' + product
 #-------------------------------------------------------------------------------
 
-#def connect_public_old(mins, product="BTCUSDT", test=True):
-#    if test:
-#        url = 'https://api-testnet.bybit.com'
-#        net = 'wss://stream-testnet.bybit.com/realtime_public'
-#    else:
-#        url = 'https://api.bybit.com'
-#        net = 'wss://stream.bybit.com/realtime_public'
-#        
-#    subpr = "instrument_info.100ms."+product
-#    subc = "candle."+str(mins)+"."+product
-#    ws = WebSocket(endpoint=net, subscriptions=[subpr, subc], ping_timeout=10, ping_interval=30, logging_level=0);
-#    session1 = HTTP(url)
-#    return ws, session1, subpr, subc
-#
-#def connect_private_old(api_key, api_secret, test=True):
-#    if test:
-#        url = 'https://api-testnet.bybit.com'
-#        net = 'wss://stream-testnet.bybit.com/realtime_private'
-#    else:
-#        url = 'https://api.bybit.com'
-#        net = 'wss://stream.bybit.com/realtime_private'
-#        
-#    session = HTTP(endpoint=url, api_key=api_key, api_secret=api_secret, recv_window=50000)
-#    ws = WebSocket(endpoint=net,  subscriptions=['order', 'position'], api_key=api_key, api_secret=api_secret, ping_timeout=10, ping_interval=30, logging_level=0)
-#    return ws, session
-
 def connect_session_private(api_key, api_secret, test=True):
     if test:
         url = 'https://api-testnet.bybit.com'
@@ -199,7 +173,7 @@ def mean_rev_xper(conct_target, pr, prev_pr, prev_sign, prev_conct, trade_size, 
     return trade, ret, pr, sign, conct, order_id, msg
     
     
-    dummy = True
+dummy = True
 product="BTCUSDT"
 lev = 3
 use_perc_balance = 0.3
