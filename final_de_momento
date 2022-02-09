@@ -312,3 +312,14 @@ with open(locroot + filename, 'w', newline='') as csvfile:
 csvfile.close()
 dfr.reset_index()
 
+#--------------------------
+filename = 'log_test_' + str(dt.datetime.today())[:10] + '.csv'
+f = open(loc + filename, "w")
+f.write('a;b;c'+'\n')
+f.close()
+
+for i in range(10): 
+    list1 = [i, random.randint(0,10000), random.randint(0,10000)]
+    f = open(loc + 'New_score/working files/' + filename, "a")
+    f.write(';'.join([str(i) for i in list1])+'\n')
+    f.close()
