@@ -309,4 +309,6 @@ with open(locroot + filename, 'w', newline='') as csvfile:
             ct_trade = (ct_trade+1)*in_trade
             time.sleep(2)
 
+csvfile.close()
 dfr.reset_index()
+
