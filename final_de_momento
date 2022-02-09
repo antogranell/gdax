@@ -323,3 +323,14 @@ for i in range(10):
     f = open(loc + 'New_score/working files/' + filename, "a")
     f.write(';'.join([str(i) for i in list1])+'\n')
     f.close()
+    
+ #--------------------------
+
+ideas: usar provate session para server time.
+cerrar session. Si no puedo llamar _exit, quitarle el guion bajo
+    def _exit(self):
+        """Closes the request session."""
+        self.client.close()
+        self.logger.debug('HTTP session closed.')
+
+change max_retries=3 (http __init__)
