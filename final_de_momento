@@ -79,36 +79,9 @@ def connect_ws_public(product="BTCUSDT", test=True):
     ws = WebSocket(endpoint=net, subscriptions=[subpr], ping_timeout=100, ping_interval=300, logging_level=0);
     return ws, subpr
 
-def get_price_old(product="BTCUSDT", test=True):
-    ws_public, subpr = connect_ws_public(product=product, test=test)
-    pr =  float(pd.json_normalize(ws_public.fetch(subpr))['last_price'][0])
-    ws_public.exit()
-    return pr
-
-def get_price_old2(product="BTCUSDT", test=True):
-    ct = 0
-    check1 = False
-    while not check1:
-        try:
-            ws_public, subpr = connect_ws_public(product=product, test=test)
-            time.sleep(0.05)
-            dfpr = pd.json_normalize(ws_public.fetch(subpr))
-            leng = len(dfpr.columns)
-            while leng == 0:
-                dfpr = pd.json_normalize(ws_public.fetch(subpr))
-                leng = len(dfpr.columns)
-                time.sleep(0.05)
-                ct+=1
-            ws_public.exit()
-            pr = float(dfpr['last_price'][0])
-            check1 = True
-        except:
-            time.sleep(0.05)
-    return pr
-
 def get_price(product="BTCUSDT", test=True):
-    api_key = ''
-    api_secret = ''
+    api_key = 'ie9sHFzvNw0xNpkkgO'
+    api_secret = 'VEv7ptCowmpS0oIpDP8O46YXKpvL7oNbGTLs'
     session_private = connect_session_private(api_key, api_secret, test=False)
     price = session_private.orderbook(symbol="BTCUSDT")['result'][0]['price']
     while len(price)<1:
@@ -120,15 +93,6 @@ def get_price(product="BTCUSDT", test=True):
 def get_latency(session_public):
     x = (dt.datetime.now() - datetime.datetime.fromtimestamp(float(session_public.server_time()['time_now'])))
     return (x.seconds + x.microseconds/1000000), round(time.time()-float(session_public.server_time()['time_now']),6)
-        
-def get_latency_adjust_seconds(session_public):
-    lat = round(time.time()-float(session_public.server_time()['time_now']),6)
-    if 1 > abs(lat) > 0.7:  
-        return int(round(lat))
-    elif abs(lat) > 1:
-        return int(np.floor(lat))
-    else: 
-        return 0
     
 def setsystime_seconds(secdelta):
     while not 60 > dt.datetime.now().second - secdelta > 0:
@@ -137,14 +101,6 @@ def setsystime_seconds(secdelta):
     millisec = int(round((dt.datetime.now() - dt.datetime(dt.datetime.now().year, dt.datetime.now().month, dt.datetime.now().day, dt.datetime.now().hour, dt.datetime.now().minute, 0)).microseconds / 1000))
     pywin32.SetSystemTime(dt.datetime.now().year, dt.datetime.now().month, dt.datetime.now().weekday(), dt.datetime.now().day, dt.datetime.now().hour-1, dt.datetime.now().minute, dt.datetime.now().second - secdelta, millisec)
     return 'time changed '+ str(secdelta) + ' seconds from: ' + str(t1) + ' - to:' + str(dt.datetime.now())
-
-def adjust_time_for_latency_seconds(session_public):
-    secdelta = get_latency_adjust_seconds(session_public)
-    if secdelta != 0:
-        msg = setsystime_seconds(secdelta)
-    else:
-        msg = ''
-    return msg
 
 def adjust_time_for_latency(session_private):
     lat = int(round(time.time()-float(session_private.server_time()['time_now']), 3) * 1000)
@@ -168,25 +124,6 @@ def adjust_time_for_latency(session_private):
 def init_vals(product="BTCUSDT", test=True):
     return get_price(product=product, test=test), np.nan, 0, ''
 
-def get_vola50sec(product="BTCUSDT", test=True):
-    try:
-        itime = dt.datetime.now()
-        vola_ct = 0
-        pr_vola = []
-        while (dt.datetime.now() - itime).seconds < 45:
-            pr_vola.append(get_price(product=product, test=test))
-            vola_ct+=1
-            time.sleep(1.5)
-        vol1 = round((np.array(pr_vola)[1:] / np.array(pr_vola)[:-1]).std() * np.sqrt(365*24*60*30), 6)
-        vol2 = round((np.array(pr_vola)[-3:] / np.array(pr_vola)[-4:-1]).std() * np.sqrt(365*24*60*30), 6)
-        dif1 = round(abs(np.array(pr_vola)[1:] - np.array(pr_vola)[:-1]).mean(), 4)
-        dif2 = round(abs(np.array(pr_vola)[-3:] - np.array(pr_vola)[-4:-1]).mean(), 4)
-        dif3 = round((np.array(pr_vola)[-3:] - np.array(pr_vola)[-4:-1]).mean(), 4)
-        volat = (dt.datetime.now() - itime).seconds
-        x =  pd.DataFrame([[vol1, vol2, dif1, dif2, dif3, volat]], columns = ['vola_50sec','vola_6sec','dif_50sec','dif_6sec','dif_6sec_sign','vola_sec'])
-    except:
-        x = pd.DataFrame(columns = ['vola_50sec','vola_6sec','dif_50sec','dif_6sec','dif_6sec_sign','vola_sec'])
-    return x
 
 def get_price_diff(product="BTCUSDT", test=True):
     product="BTCUSDT"
@@ -208,16 +145,6 @@ def get_price_diff(product="BTCUSDT", test=True):
     except:
         x = pd.DataFrame(columns = ['pr_diff','pr_diff_sign','dift'])
     return x
-
-def get_pr_buffer(close_pr, price_buffer_i, dfvola, flddelta='pr_diff'):
-    price_buffer = price_buffer_i
-    prdelta = price_buffer_i * close_pr
-    if len(dfvola)>0:
-        prdelta_ = max(dfvola[flddelta][0], 0.5)
-        if close_pr * price_buffer_i > prdelta_ * 2:
-            price_buffer = prdelta_ * 2 / close_pr
-            prdelta = prdelta_ * 2
-    return price_buffer, prdelta
 
 def get_pr_buffer_dict(dfvola, maxbuffer, flddelta='pr_diff', fldsign='pr_diff_sign'):
     prdelta = dfvola[flddelta][0]
