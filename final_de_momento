@@ -219,6 +219,19 @@ def get_pr_buffer(close_pr, price_buffer_i, dfvola, flddelta='pr_diff'):
             prdelta = prdelta_ * 2
     return price_buffer, prdelta
 
+def get_pr_buffer_dict(dfvola, columns=['pr_diff','pr_diff_sign']):
+    flddelta='pr_diff'
+    fldsign='pr_diff_sign'
+    prdelta = dfvola[flddelta][0]
+    sign = dfvola[fldsign][0]
+    direct_dif = prdelta / abs(sign)
+    direct_dif
+    if sign < 0:
+        buffer_dict = {'Buy':prdelta+1.5, 'Sell':1.5 * (direct_dif)}
+    else:
+        buffer_dict = {'Buy':1.5 * (direct_dif), 'Sell':prdelta+1.5}
+    return buffer_dict
+
 def mean_rev_xper(session_private, conct_target, pr, prev_pr, prev_sign, prev_conct, trade_size, price_buffer, thresnull=0.00014, dummy=True):
     msg = ''
     trade=''
