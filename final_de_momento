@@ -219,20 +219,17 @@ def get_pr_buffer(close_pr, price_buffer_i, dfvola, flddelta='pr_diff'):
             prdelta = prdelta_ * 2
     return price_buffer, prdelta
 
-def get_pr_buffer_dict(dfvola, columns=['pr_diff','pr_diff_sign']):
-    flddelta='pr_diff'
-    fldsign='pr_diff_sign'
+def get_pr_buffer_dict(dfvola, maxbuffer, flddelta='pr_diff', fldsign='pr_diff_sign'):
     prdelta = dfvola[flddelta][0]
     sign = dfvola[fldsign][0]
-    direct_dif = prdelta / abs(sign)
-    direct_dif
+    direct_dif = 1 if sign==0 else prdelta / abs(sign)
     if sign < 0:
-        buffer_dict = {'Buy':prdelta+1.5, 'Sell':1.5 * (direct_dif)}
+        buffer_dict = {'Buy':min(prdelta+1.5, maxbuffer), 'Sell':min(1.5 * (direct_dif), maxbuffer)}
     else:
-        buffer_dict = {'Buy':1.5 * (direct_dif), 'Sell':prdelta+1.5}
+        buffer_dict = {'Buy':min(1.5 * direct_dif, maxbuffer), 'Sell':min(prdelta+1.5, maxbuffer)}
     return buffer_dict
 
-def mean_rev_xper(session_private, conct_target, pr, prev_pr, prev_sign, prev_conct, trade_size, price_buffer, thresnull=0.00014, dummy=True):
+def mean_rev_xper(session_private, conct_target, pr, prev_pr, prev_sign, prev_conct, trade_size, buffer_dict, thresnull=0.00014, dummy=True):
     msg = ''
     trade=''
     order_id = 0
@@ -247,16 +244,16 @@ def mean_rev_xper(session_private, conct_target, pr, prev_pr, prev_sign, prev_co
             
             if sign=='neg':
                 trade='Buy'
-                order_id, msg = put_order(session_private, product, round((pr - price_buffer)*2)/2, trade=trade, quantity=trade_size, order_type='limit', dummy=dummy)
+                order_id, msg = put_order(session_private, product, round((pr - buffer_dict[trade])*2)/2, trade=trade, quantity=trade_size, order_type='limit', dummy=dummy)
             elif sign=='pos':
                 trade='Sell'
-                order_id, msg = put_order(session_private, product, round((pr + price_buffer)*2)/2, trade=trade, quantity=trade_size, order_type='limit', dummy=dummy)    
+                order_id, msg = put_order(session_private, product, round((pr + buffer_dict[trade])*2)/2, trade=trade, quantity=trade_size, order_type='limit', dummy=dummy)    
         
     return trade, ret, pr, sign, conct, order_id, msg
 
 #C:\ProgramData\Anaconda3\Lib
 
-#-------------------------------------------------------------------
+#--------------------------------------------------------
 
 dummy = True
 product="BTCUSDT"
@@ -266,10 +263,10 @@ use_perc_balance = 0.3
 thresnull = 0.00015 #minimum not null return
 conct_target = 3 #consecutive signs to trade
 periods_in_trade = 2 #periods that trades is open
-price_buffer_i = 1/10000
+price_buffer_i = 1/4000
 #trade_size = 0.001
 
-api_name = 'der_rw_noip' #NO fixed IP (19-01-2022)
+api_name = '' #NO fixed IP (19-01-2022)
 api_key = ''
 api_secret = ''
 permission = 'Contracts - Orders Positions'
@@ -284,17 +281,9 @@ close_order_id = 0
 ct = 0
 ct_trade = 0
 in_trade = 0
+todayday = 0
 msg = []
 position=True
-
-#------------------------------------- logging--------------------------------    
-locroot = 'C:/python_projects/' 
-filename = 'bot_activity3_' + str(dt.datetime.today())[:10] + '.csv'
-f = open(locroot + filename, "w")
-fieldnames = ['ct','t','price','ret','sign','conct','trade', 'order_id','close_order_id','message','price_buffer','pr_diff','pr_diff_sign','dift']
-f.write(';'.join([str(i) for i in fieldnames])+'\n')
-f.close()
-#------------------------------------------------------------------------------
 
 print('starting time:', dt.datetime.now())
 print('')
@@ -310,6 +299,14 @@ trade_size = get_trade_size(session_private, use_perc_balance)
 while ct < 10000:
 
     timestamp1 = dt.datetime.now()
+    
+    if todayday != timestamp1.day:
+        locroot = 'C:/python_projects/' 
+        filename = 'bot_activity_' + str(dt.datetime.today())[:10] + '.csv'
+        fieldnames = ['ct','t','price','ret','sign','conct','trade', 'order_id','close_order_id','message','buffer_dict','pr_diff','pr_diff_sign','dift']
+        f.write(';'.join([str(i) for i in fieldnames])+'\n')
+        f.close()
+        todayday = timestamp1.day
     
     if ((timestamp1.minute % mins == (mins - 1)) & (45 < timestamp1.second < 50)):
         print(ct)
@@ -349,14 +346,13 @@ while ct < 10000:
                         print('close trade')
 
                         close_pr = get_price(product=product, test=test)
-
-                        price_buffer = get_pr_buffer(close_pr, price_buffer_i, dfvola, flddelta='pr_diff')[1]
+                        buffer_dict = get_pr_buffer_dict(dfvola, close_pr*price_buffer_i, flddelta='pr_diff', fldsign='pr_diff_sign')
 
                         if current_trade=='Buy':
-                            close_order_id, msg_ = put_order(session_private, product, round((close_pr+price_buffer)*2)/2, trade='Sell', quantity=current_trade_size, order_type='limit', dummy=dummy)
+                            close_order_id, msg_ = put_order(session_private, product, round((close_pr+buffer_dict[current_trade])*2)/2, trade='Sell', quantity=current_trade_size, order_type='limit', dummy=dummy)
                             msg.append(msg_)
                         elif current_trade=='Sell':
-                            close_order_id, msg_ = put_order(session_private, product, round((close_pr-price_buffer)*2)/2, trade='Buy', quantity=current_trade_size, order_type='limit', dummy=dummy)   
+                            close_order_id, msg_ = put_order(session_private, product, round((close_pr-buffer_dict[current_trade])*2)/2, trade='Buy', quantity=current_trade_size, order_type='limit', dummy=dummy)   
                             msg.append(msg_)
                         current_close_order_id = close_order_id
                     check3 = True
@@ -394,9 +390,9 @@ while ct < 10000:
         while not check5:
             try:
                 close_pr = get_price(product=product, test=test)
-                price_buffer = get_pr_buffer(close_pr, price_buffer_i, dfvola, flddelta='pr_diff')[1]
+                buffer_dict = get_pr_buffer_dict(dfvola, close_pr*price_buffer_i, flddelta='pr_diff', fldsign='pr_diff_sign')
 
-                trade, ret, prev_pr, prev_sign, prev_conct, order_id, msg_ = mean_rev_xper(session_private, conct_target, close_pr, prev_pr, prev_sign, prev_conct, trade_size, price_buffer,
+                trade, ret, prev_pr, prev_sign, prev_conct, order_id, msg_ = mean_rev_xper(session_private, conct_target, close_pr, prev_pr, prev_sign, prev_conct, trade_size, buffer_dict,
                                                                                            thresnull=thresnull, dummy=dummy)
                 msg.append(msg_)
                 check5=True
@@ -415,8 +411,8 @@ while ct < 10000:
 
         msg = str(msg).replace('[','').replace(']','').replace("'","").replace(', ,','')
         msg = '' if msg == ', ' else msg
-        dfr_ = pd.DataFrame([ct, dt.datetime.now(), prev_pr, ret, prev_sign, prev_conct, trade, order_id, close_order_id, msg, round(price_buffer,2)]).T
-        dfr_.columns = ['ct','t','price','ret','sign','conct','trade', 'order_id','close_order_id','message','price_buffer']
+        dfr_ = pd.DataFrame([ct, dt.datetime.now(), prev_pr, ret, prev_sign, prev_conct, trade, order_id, close_order_id, msg, buffer_dict]).T
+        dfr_.columns = ['ct','t','price','ret','sign','conct','trade', 'order_id','close_order_id','message','buffer_dict']
         dfr_= pd.concat([dfr_, dfvola], axis=1)
         print(close_pr, prev_sign, prev_conct, trade, msg)
         
